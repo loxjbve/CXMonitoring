@@ -1,3 +1,96 @@
+const translations = {
+  en: {
+    taskTitle: "Looking for an active Codex task",
+    disconnected: "Disconnected",
+    connected: "Connected",
+    idle: "Idle",
+    details: "ℹ️ Details",
+    emptyState: "No active Codex thread has been discovered yet.",
+    placeholder: "Ask AI to code...",
+    workspace: "Workspace",
+    mode: "Mode",
+    progressTitle: "Current Progress",
+    liveSummary: "Live summary",
+    noTask: "No active Codex task detected.",
+    latestPrompt: "Latest prompt",
+    recentCommand: "Recent Command",
+    shellActivity: "Shell activity",
+    noCommand: "No command seen yet.",
+    recentTool: "Recent Tool",
+    toolingActivity: "Tooling activity",
+    noTool: "No tool activity yet.",
+    tokenUsage: "Token Usage",
+    latestTotals: "Latest totals",
+    total: "Total",
+    input: "Input",
+    output: "Output",
+    reasoning: "Reasoning",
+    waitingForData: "Waiting for data",
+    waitingForMessage: "Waiting for a visible Codex progress message.",
+    heroDefault: "This page follows the latest active Codex VS Code task running on this machine.",
+    updated: "Updated ",
+    noUpdates: "No updates yet",
+    statusPrefix: "Status: ",
+    durationPrefix: "Duration: ",
+    toolPrefix: "Tool: ",
+    statePrefix: "State: ",
+    user: "User",
+    codex: "Codex",
+    reject: "Reject",
+    apply: "Apply",
+    langToggle: "🇺🇸 EN",
+    staleBanner: "Data may be stale. Waiting for a fresh update from the desktop service.",
+    untitledTask: "Untitled Codex task",
+    event: "Event"
+  },
+  zh: {
+    taskTitle: "正在寻找活跃的 Codex 任务",
+    disconnected: "已断开",
+    connected: "已连接",
+    idle: "空闲",
+    details: "ℹ️ 详情",
+    emptyState: "尚未发现活跃的 Codex 线程。",
+    placeholder: "让 AI 帮你写代码...",
+    workspace: "工作区",
+    mode: "模式",
+    progressTitle: "当前进度",
+    liveSummary: "实时摘要",
+    noTask: "未检测到活跃的 Codex 任务。",
+    latestPrompt: "最新提示词",
+    recentCommand: "最近命令",
+    shellActivity: "Shell 动态",
+    noCommand: "尚未看到任何命令。",
+    recentTool: "最近工具",
+    toolingActivity: "工具动态",
+    noTool: "尚未有工具活动。",
+    tokenUsage: "Token 消耗",
+    latestTotals: "最新统计",
+    total: "总计",
+    input: "输入",
+    output: "输出",
+    reasoning: "推理",
+    waitingForData: "等待数据...",
+    waitingForMessage: "等待可见的 Codex 进度消息。",
+    heroDefault: "此页面跟踪本机正在运行的最新活跃 Codex VS Code 任务。",
+    updated: "已更新 ",
+    noUpdates: "暂无更新",
+    statusPrefix: "状态: ",
+    durationPrefix: "耗时: ",
+    toolPrefix: "工具: ",
+    statePrefix: "状态: ",
+    user: "用户",
+    codex: "Codex",
+    reject: "拒绝",
+    apply: "应用",
+    langToggle: "🇨🇳 中文",
+    staleBanner: "数据可能已过期。正在等待桌面服务的新更新。",
+    untitledTask: "未命名 Codex 任务",
+    event: "事件"
+  }
+};
+
+let currentLang = localStorage.getItem("lang") || "zh";
+
 const state = {
   snapshot: null,
   eventSource: null,
@@ -24,9 +117,13 @@ const elements = {
   timelineList: document.getElementById("timeline-list"),
   emptyState: document.getElementById("empty-state"),
   staleBanner: document.getElementById("stale-banner"),
+  langToggleBtn: document.getElementById("lang-toggle-btn"),
 };
 
 async function bootstrap() {
+  initDrawer();
+  initI18n();
+
   try {
     const response = await fetch("/api/current", { cache: "no-store" });
     if (response.ok) {
@@ -86,47 +183,83 @@ function updateSnapshot(snapshot) {
   renderSnapshot();
 }
 
+function initI18n() {
+  if (elements.langToggleBtn) {
+    elements.langToggleBtn.addEventListener("click", () => {
+      currentLang = currentLang === "en" ? "zh" : "en";
+      localStorage.setItem("lang", currentLang);
+      updateStaticTexts();
+      if (state.snapshot) {
+        renderSnapshot();
+      }
+    });
+  }
+  updateStaticTexts();
+}
+
+function updateStaticTexts() {
+  const t = translations[currentLang];
+  if (elements.langToggleBtn) {
+    elements.langToggleBtn.textContent = currentLang === "zh" ? "🇺🇸 EN" : "🇨🇳 中文";
+  }
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const key = el.getAttribute("data-i18n");
+    if (t[key]) {
+      el.textContent = t[key];
+    }
+  });
+
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    const key = el.getAttribute("data-i18n-placeholder");
+    if (t[key]) {
+      el.placeholder = t[key];
+    }
+  });
+}
+
 function renderSnapshot() {
   const snapshot = state.snapshot || {};
   const hasThread = Boolean(snapshot.thread_id);
+  const t = translations[currentLang];
 
   elements.taskTitle.textContent = hasThread
-    ? snapshot.title || "Untitled Codex task"
-    : "Looking for an active Codex task";
+    ? snapshot.title || t.untitledTask
+    : t.taskTitle;
 
   elements.heroCopy.textContent = hasThread
-    ? snapshot.last_agent_message || "Waiting for a visible Codex progress message."
-    : "This page follows the latest active Codex VS Code task running on this machine.";
+    ? snapshot.last_agent_message || t.waitingForMessage
+    : t.heroDefault;
 
   setStatus(snapshot.status || "idle");
   elements.updatedAt.textContent = snapshot.updated_at
-    ? `Updated ${formatTime(snapshot.updated_at)}`
-    : "No updates yet";
-  elements.cwd.textContent = snapshot.cwd || "Waiting for data";
+    ? `${t.updated}${formatTime(snapshot.updated_at)}`
+    : t.noUpdates;
+  elements.cwd.textContent = snapshot.cwd || t.waitingForData;
   elements.collaborationMode.textContent = snapshot.collaboration_mode || "-";
   elements.progressText.textContent =
-    snapshot.last_agent_message || "No active Codex task detected.";
+    snapshot.last_agent_message || t.noTask;
   elements.promptText.textContent = snapshot.last_user_message || "-";
 
   const command = snapshot.last_command || {};
-  elements.commandSummary.textContent = command.summary || "No command seen yet.";
+  elements.commandSummary.textContent = command.summary || t.noCommand;
   elements.commandStatus.textContent = command.status
-    ? `Status: ${command.status}`
-    : "Status: -";
+    ? `${t.statusPrefix}${command.status}`
+    : `${t.statusPrefix}-`;
   elements.commandDuration.textContent =
     typeof command.duration_seconds === "number"
-      ? `Duration: ${command.duration_seconds.toFixed(2)}s`
-      : "Duration: -";
+      ? `${t.durationPrefix}${command.duration_seconds.toFixed(2)}s`
+      : `${t.durationPrefix}-`;
 
   const activeTool = snapshot.active_tool || {};
   elements.toolSummary.textContent =
-    snapshot.last_tool_output_summary || activeTool.summary || "No tool activity yet.";
+    snapshot.last_tool_output_summary || activeTool.summary || t.noTool;
   elements.toolName.textContent = activeTool.name
-    ? `Tool: ${activeTool.name}`
-    : "Tool: -";
+    ? `${t.toolPrefix}${activeTool.name}`
+    : `${t.toolPrefix}-`;
   elements.toolStatus.textContent = activeTool.status
-    ? `State: ${activeTool.status}`
-    : "State: -";
+    ? `${t.statePrefix}${activeTool.status}`
+    : `${t.statePrefix}-`;
 
   renderTokenStats(snapshot.token_usage || null);
   renderTimeline();
@@ -135,11 +268,12 @@ function renderSnapshot() {
 
 function renderTokenStats(tokenUsage) {
   const values = tokenUsage || {};
+  const t = translations[currentLang];
   const items = [
-    ["Total", formatNumber(values.total_tokens)],
-    ["Input", formatNumber(values.input_tokens)],
-    ["Output", formatNumber(values.output_tokens)],
-    ["Reasoning", formatNumber(values.reasoning_output_tokens)],
+    [t.total, formatNumber(values.total_tokens)],
+    [t.input, formatNumber(values.input_tokens)],
+    [t.output, formatNumber(values.output_tokens)],
+    [t.reasoning, formatNumber(values.reasoning_output_tokens)],
   ];
 
   elements.tokenStats.innerHTML = items
@@ -153,6 +287,7 @@ function renderTokenStats(tokenUsage) {
 function renderTimeline() {
   const snapshot = state.snapshot || {};
   const timeline = Array.isArray(snapshot.timeline) ? snapshot.timeline : [];
+  const t = translations[currentLang];
   
   elements.timelineList.innerHTML = timeline
     .map((entry) => {
@@ -161,21 +296,15 @@ function renderTimeline() {
       const isTool = kindStr.includes("tool") || kindStr.includes("action") || kindStr.includes("command") || kindStr.includes("step");
       const isDiff = kindStr.includes("diff") || kindStr.includes("edit") || kindStr.includes("code");
       
-      const label = escapeHtml(entry.label || entry.kind || "Event");
+      if (isUser) {
+        return "";
+      }
+      
+      const label = escapeHtml(entry.label || entry.kind || t.event);
       const time = escapeHtml(formatTime(entry.ts));
       const summary = escapeHtml(entry.summary || "");
 
-      if (isUser) {
-        return `
-          <div class="message user">
-            <div class="message-header">
-              <span class="message-sender">User</span>
-              <span class="timestamp">${time}</span>
-            </div>
-            <div class="message-content">${summary}</div>
-          </div>
-        `;
-      } else if (isTool) {
+      if (isTool) {
         return `
           <div class="message ai">
             <div class="step-indicator">
@@ -189,15 +318,15 @@ function renderTimeline() {
         return `
           <div class="message ai">
             <div class="message-header">
-              <span class="message-sender">Codex</span>
+              <span class="message-sender">${t.codex}</span>
               <span class="timestamp">${time}</span>
             </div>
             <div class="diff-block">
               <div class="diff-header">
                 <span>${label}</span>
                 <div class="diff-actions">
-                  <button class="diff-btn">Reject</button>
-                  <button class="diff-btn apply">Apply</button>
+                  <button class="diff-btn">${t.reject}</button>
+                  <button class="diff-btn apply">${t.apply}</button>
                 </div>
               </div>
               <div class="diff-content">
@@ -211,7 +340,7 @@ function renderTimeline() {
         return `
           <div class="message ai">
             <div class="message-header">
-              <span class="message-sender">Codex</span>
+              <span class="message-sender">${t.codex}</span>
               <span class="timestamp">${time}</span>
             </div>
             <div class="message-content">${summary}</div>
@@ -228,12 +357,14 @@ function renderTimeline() {
 }
 
 function setConnectionState(isConnected) {
-  elements.connectionPill.textContent = isConnected ? "Connected" : "Disconnected";
+  const t = translations[currentLang];
+  elements.connectionPill.textContent = isConnected ? t.connected : t.disconnected;
   elements.connectionPill.className = `pill ${isConnected ? "connected" : "disconnected"}`;
 }
 
 function setStatus(status) {
-  const text = status ? capitalize(status) : "Idle";
+  const t = translations[currentLang];
+  const text = status ? capitalize(status) : t.idle;
   elements.statusPill.textContent = text;
   elements.statusPill.className = `pill ${status || "idle"}`;
 }
@@ -279,6 +410,24 @@ function escapeHtml(value) {
 
 function capitalize(value) {
   return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+}
+
+function initDrawer() {
+  const toggleBtn = document.getElementById("toggle-details-btn");
+  const closeBtn = document.getElementById("close-details-btn");
+  const drawer = document.getElementById("details-drawer");
+
+  if (toggleBtn && drawer) {
+    toggleBtn.addEventListener("click", () => {
+      drawer.classList.toggle("drawer-open");
+    });
+  }
+
+  if (closeBtn && drawer) {
+    closeBtn.addEventListener("click", () => {
+      drawer.classList.remove("drawer-open");
+    });
+  }
 }
 
 bootstrap();
