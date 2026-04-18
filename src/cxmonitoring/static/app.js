@@ -27,6 +27,8 @@ const elements = {
 };
 
 async function bootstrap() {
+  initDrawer();
+
   try {
     const response = await fetch("/api/current", { cache: "no-store" });
     if (response.ok) {
@@ -161,21 +163,15 @@ function renderTimeline() {
       const isTool = kindStr.includes("tool") || kindStr.includes("action") || kindStr.includes("command") || kindStr.includes("step");
       const isDiff = kindStr.includes("diff") || kindStr.includes("edit") || kindStr.includes("code");
       
+      if (isUser) {
+        return "";
+      }
+      
       const label = escapeHtml(entry.label || entry.kind || "Event");
       const time = escapeHtml(formatTime(entry.ts));
       const summary = escapeHtml(entry.summary || "");
 
-      if (isUser) {
-        return `
-          <div class="message user">
-            <div class="message-header">
-              <span class="message-sender">User</span>
-              <span class="timestamp">${time}</span>
-            </div>
-            <div class="message-content">${summary}</div>
-          </div>
-        `;
-      } else if (isTool) {
+      if (isTool) {
         return `
           <div class="message ai">
             <div class="step-indicator">
@@ -279,6 +275,24 @@ function escapeHtml(value) {
 
 function capitalize(value) {
   return String(value).charAt(0).toUpperCase() + String(value).slice(1);
+}
+
+function initDrawer() {
+  const toggleBtn = document.getElementById("toggle-details-btn");
+  const closeBtn = document.getElementById("close-details-btn");
+  const drawer = document.getElementById("details-drawer");
+
+  if (toggleBtn && drawer) {
+    toggleBtn.addEventListener("click", () => {
+      drawer.classList.toggle("drawer-open");
+    });
+  }
+
+  if (closeBtn && drawer) {
+    closeBtn.addEventListener("click", () => {
+      drawer.classList.remove("drawer-open");
+    });
+  }
 }
 
 bootstrap();

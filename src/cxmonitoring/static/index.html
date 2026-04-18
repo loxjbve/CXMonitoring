@@ -9,13 +9,14 @@
   <body>
     <div class="backdrop"></div>
     <div class="layout-wrapper">
-      <!-- Sidebar (AI Chat Area) -->
-      <aside class="sidebar">
+      <!-- Main Chat Area -->
+      <main class="chat-container">
         <header class="chat-header">
           <h1 id="task-title">Looking for an active Codex task</h1>
           <div class="pill-row">
             <span class="pill disconnected" id="connection-pill">Disconnected</span>
             <span class="pill idle" id="status-pill">Idle</span>
+            <button id="toggle-details-btn" class="pill action-btn" title="Toggle Details">ℹ️ Details</button>
           </div>
         </header>
 
@@ -33,10 +34,11 @@
             <div class="model-selector">GPT-4</div>
           </div>
         </div>
-      </aside>
+      </main>
 
-      <!-- Main Content Area -->
-      <main class="main-content">
+      <!-- Details Drawer -->
+      <aside class="details-drawer" id="details-drawer">
+        <button id="close-details-btn" class="close-btn" aria-label="Close details">×</button>
         <header class="top-bar">
           <div class="top-bar-left">
             <p class="eyebrow">Codex LAN Monitor</p>
@@ -112,7 +114,7 @@
             </dl>
           </section>
         </div>
-      </main>
+      </aside>
     </div>
 
     <script src="/static/app.js" defer></script>
