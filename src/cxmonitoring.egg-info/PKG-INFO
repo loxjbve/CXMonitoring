@@ -1,0 +1,81 @@
+Metadata-Version: 2.4
+Name: cxmonitoring
+Version: 0.1.0
+Summary: LAN dashboard for observing active Codex VS Code tasks in real time.
+Requires-Python: >=3.13
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0,>=0.115
+Requires-Dist: uvicorn<1.0,>=0.30
+Provides-Extra: dev
+Requires-Dist: httpx<1.0,>=0.27; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.0; extra == "dev"
+
+# CXMonitoring
+
+`CXMonitoring` is a read-only LAN dashboard for watching the active Codex task from the VS Code extension in real time.
+
+## What It Reads
+
+- `%USERPROFILE%\.codex\state_5.sqlite` for active thread metadata
+- `%USERPROFILE%\.codex\sessions\...\rollout-*.jsonl` for the live event stream
+
+It does not modify the OpenAI extension or write back into Codex state.
+
+## Features
+
+- Detects the latest active VS Code Codex thread
+- Replays the current rollout file to build the live snapshot
+- Tails new JSONL events with polling
+- Streams updates to the browser over SSE
+- Mobile-friendly single-page dashboard for LAN viewing
+
+## Security
+
+This v1 binds to `0.0.0.0:3180` and does not require authentication.
+
+Anyone on your home LAN who can reach your machine can see:
+
+- the current task title
+- recent Codex progress messages
+- recent command/tool summaries
+- token usage summaries
+
+## Run
+
+1. Install runtime dependencies:
+
+```powershell
+python -m pip install --user fastapi uvicorn httpx
+```
+
+2. Start the server:
+
+```powershell
+python run_server.py
+```
+
+Or install the project package and run it as a module:
+
+```powershell
+python -m pip install -e .
+python -m cxmonitoring
+```
+
+3. Open:
+
+- `http://127.0.0.1:3180`
+- `http://<your-lan-ip>:3180`
+
+## Environment Variables
+
+- `CXMONITORING_CODEX_HOME`: override the Codex home directory
+- `CXMONITORING_HOST`: override the bind host, defaults to `0.0.0.0`
+- `CXMONITORING_PORT`: override the port, defaults to `3180`
+- `CXMONITORING_THREAD_POLL`: override thread refresh interval in seconds, defaults to `1.0`
+- `CXMONITORING_ROLLOUT_POLL`: override rollout tail interval in seconds, defaults to `0.3`
+
+## Tests
+
+```powershell
+python -m unittest discover -s tests
+```

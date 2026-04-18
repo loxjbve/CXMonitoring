@@ -153,21 +153,78 @@ function renderTokenStats(tokenUsage) {
 function renderTimeline() {
   const snapshot = state.snapshot || {};
   const timeline = Array.isArray(snapshot.timeline) ? snapshot.timeline : [];
+  
   elements.timelineList.innerHTML = timeline
-    .slice()
-    .reverse()
-    .map(
-      (entry) => `
-        <li>
-          <div class="timeline-row">
-            <span class="timeline-label">${escapeHtml(entry.label || entry.kind || "Event")}</span>
-            <span class="timestamp">${escapeHtml(formatTime(entry.ts))}</span>
+    .map((entry) => {
+      const kindStr = (entry.kind || entry.label || "").toLowerCase();
+      const isUser = kindStr.includes("user") || kindStr === "prompt";
+      const isTool = kindStr.includes("tool") || kindStr.includes("action") || kindStr.includes("command") || kindStr.includes("step");
+      const isDiff = kindStr.includes("diff") || kindStr.includes("edit") || kindStr.includes("code");
+      
+      const label = escapeHtml(entry.label || entry.kind || "Event");
+      const time = escapeHtml(formatTime(entry.ts));
+      const summary = escapeHtml(entry.summary || "");
+
+      if (isUser) {
+        return `
+          <div class="message user">
+            <div class="message-header">
+              <span class="message-sender">User</span>
+              <span class="timestamp">${time}</span>
+            </div>
+            <div class="message-content">${summary}</div>
           </div>
-          <p class="timeline-summary">${escapeHtml(entry.summary || "")}</p>
-        </li>
-      `
-    )
+        `;
+      } else if (isTool) {
+        return `
+          <div class="message ai">
+            <div class="step-indicator">
+              <div class="step-spinner"></div>
+              <span>${label}: ${summary}</span>
+              <span class="timestamp" style="margin-left: auto;">${time}</span>
+            </div>
+          </div>
+        `;
+      } else if (isDiff) {
+        return `
+          <div class="message ai">
+            <div class="message-header">
+              <span class="message-sender">Codex</span>
+              <span class="timestamp">${time}</span>
+            </div>
+            <div class="diff-block">
+              <div class="diff-header">
+                <span>${label}</span>
+                <div class="diff-actions">
+                  <button class="diff-btn">Reject</button>
+                  <button class="diff-btn apply">Apply</button>
+                </div>
+              </div>
+              <div class="diff-content">
+                <div class="diff-line remove">- // Old implementation</div>
+                <div class="diff-line add">+ ${summary}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="message ai">
+            <div class="message-header">
+              <span class="message-sender">Codex</span>
+              <span class="timestamp">${time}</span>
+            </div>
+            <div class="message-content">${summary}</div>
+          </div>
+        `;
+      }
+    })
     .join("");
+
+  const container = document.getElementById("timeline-container");
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
 }
 
 function setConnectionState(isConnected) {

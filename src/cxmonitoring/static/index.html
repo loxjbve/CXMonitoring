@@ -8,94 +8,110 @@
   </head>
   <body>
     <div class="backdrop"></div>
-    <div class="shell">
-      <header class="hero">
-        <p class="eyebrow">Codex LAN Monitor</p>
-        <h1 id="task-title">Looking for an active Codex task</h1>
-        <p class="hero-copy" id="hero-copy">
-          This page follows the current VS Code Codex task running on this machine.
-        </p>
-        <div class="pill-row">
-          <span class="pill disconnected" id="connection-pill">Disconnected</span>
-          <span class="pill idle" id="status-pill">Idle</span>
-          <span class="timestamp" id="updated-at">No updates yet</span>
-        </div>
-        <div class="meta-grid">
-          <div class="meta-card">
-            <span class="meta-label">Workspace</span>
-            <span class="meta-value" id="cwd">Waiting for data</span>
+    <div class="layout-wrapper">
+      <!-- Sidebar (AI Chat Area) -->
+      <aside class="sidebar">
+        <header class="chat-header">
+          <h1 id="task-title">Looking for an active Codex task</h1>
+          <div class="pill-row">
+            <span class="pill disconnected" id="connection-pill">Disconnected</span>
+            <span class="pill idle" id="status-pill">Idle</span>
           </div>
-          <div class="meta-card">
-            <span class="meta-label">Mode</span>
-            <span class="meta-value" id="collaboration-mode">-</span>
-          </div>
-        </div>
-      </header>
+        </header>
 
-      <section class="banner hidden" id="stale-banner">
-        Data may be stale. Waiting for a fresh update from the desktop service.
-      </section>
-
-      <main class="grid">
-        <section class="card span-2">
-          <div class="card-head">
-            <h2>Current Progress</h2>
-            <span class="card-kicker">Live summary</span>
-          </div>
-          <p class="lead" id="progress-text">No active Codex task detected.</p>
-          <div class="detail-block">
-            <span class="detail-label">Latest prompt</span>
-            <p class="detail-text" id="prompt-text">-</p>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Recent Command</h2>
-            <span class="card-kicker">Shell activity</span>
-          </div>
-          <p class="mono detail-text" id="command-summary">No command seen yet.</p>
-          <div class="inline-meta">
-            <span id="command-status">-</span>
-            <span id="command-duration">-</span>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Recent Tool</h2>
-            <span class="card-kicker">Tooling activity</span>
-          </div>
-          <p class="detail-text" id="tool-summary">No tool activity yet.</p>
-          <div class="inline-meta">
-            <span id="tool-name">-</span>
-            <span id="tool-status">-</span>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Token Usage</h2>
-            <span class="card-kicker">Latest totals</span>
-          </div>
-          <dl class="stats" id="token-stats">
-            <div><dt>Total</dt><dd>-</dd></div>
-            <div><dt>Input</dt><dd>-</dd></div>
-            <div><dt>Output</dt><dd>-</dd></div>
-            <div><dt>Reasoning</dt><dd>-</dd></div>
-          </dl>
-        </section>
-
-        <section class="card timeline-card span-2">
-          <div class="card-head">
-            <h2>Timeline</h2>
-            <span class="card-kicker">Last 20 visible events</span>
-          </div>
+        <div class="chat-messages" id="timeline-container">
           <div class="empty-state" id="empty-state">
             No active Codex thread has been discovered yet.
           </div>
-          <ol class="timeline" id="timeline-list"></ol>
+          <div id="timeline-list"></div>
+        </div>
+
+        <div class="chat-input-container">
+          <div class="chat-input-wrapper">
+            <button class="add-btn" aria-label="Add attachment">+</button>
+            <textarea placeholder="Ask AI to code..." rows="1"></textarea>
+            <div class="model-selector">GPT-4</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="main-content">
+        <header class="top-bar">
+          <div class="top-bar-left">
+            <p class="eyebrow">Codex LAN Monitor</p>
+            <p class="hero-copy" id="hero-copy">
+              This page follows the current VS Code Codex task running on this machine.
+            </p>
+          </div>
+          <span class="timestamp" id="updated-at">No updates yet</span>
+        </header>
+
+        <section class="banner hidden" id="stale-banner">
+          Data may be stale. Waiting for a fresh update from the desktop service.
         </section>
+
+        <div class="grid">
+          <div class="meta-grid span-2">
+            <div class="meta-card">
+              <span class="meta-label">Workspace</span>
+              <span class="meta-value" id="cwd">Waiting for data</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Mode</span>
+              <span class="meta-value" id="collaboration-mode">-</span>
+            </div>
+          </div>
+
+          <section class="card span-2">
+            <div class="card-head">
+              <h2>Current Progress</h2>
+              <span class="card-kicker">Live summary</span>
+            </div>
+            <p class="lead" id="progress-text">No active Codex task detected.</p>
+            <div class="detail-block">
+              <span class="detail-label">Latest prompt</span>
+              <p class="detail-text" id="prompt-text">-</p>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>Recent Command</h2>
+              <span class="card-kicker">Shell activity</span>
+            </div>
+            <p class="mono detail-text" id="command-summary">No command seen yet.</p>
+            <div class="inline-meta">
+              <span id="command-status">-</span>
+              <span id="command-duration">-</span>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <h2>Recent Tool</h2>
+              <span class="card-kicker">Tooling activity</span>
+            </div>
+            <p class="detail-text" id="tool-summary">No tool activity yet.</p>
+            <div class="inline-meta">
+              <span id="tool-name">-</span>
+              <span id="tool-status">-</span>
+            </div>
+          </section>
+
+          <section class="card span-2">
+            <div class="card-head">
+              <h2>Token Usage</h2>
+              <span class="card-kicker">Latest totals</span>
+            </div>
+            <dl class="stats" id="token-stats">
+              <div><dt>Total</dt><dd>-</dd></div>
+              <div><dt>Input</dt><dd>-</dd></div>
+              <div><dt>Output</dt><dd>-</dd></div>
+              <div><dt>Reasoning</dt><dd>-</dd></div>
+            </dl>
+          </section>
+        </div>
       </main>
     </div>
 
