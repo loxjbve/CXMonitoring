@@ -12,16 +12,17 @@
       <!-- Main Chat Area -->
       <main class="chat-container">
         <header class="chat-header">
-          <h1 id="task-title">Looking for an active Codex task</h1>
+          <h1 id="task-title" data-i18n="taskTitle">Looking for an active Codex task</h1>
           <div class="pill-row">
-            <span class="pill disconnected" id="connection-pill">Disconnected</span>
-            <span class="pill idle" id="status-pill">Idle</span>
-            <button id="toggle-details-btn" class="pill action-btn" title="Toggle Details">ℹ️ Details</button>
+            <span class="pill disconnected" id="connection-pill" data-i18n="disconnected">Disconnected</span>
+            <span class="pill idle" id="status-pill" data-i18n="idle">Idle</span>
+            <button id="lang-toggle-btn" class="pill action-btn" title="Toggle Language">🇺🇸 EN</button>
+            <button id="toggle-details-btn" class="pill action-btn" title="Toggle Details" data-i18n="details">ℹ️ Details</button>
           </div>
         </header>
 
         <div class="chat-messages" id="timeline-container">
-          <div class="empty-state" id="empty-state">
+          <div class="empty-state" id="empty-state" data-i18n="emptyState">
             No active Codex thread has been discovered yet.
           </div>
           <div id="timeline-list"></div>
@@ -30,7 +31,7 @@
         <div class="chat-input-container">
           <div class="chat-input-wrapper">
             <button class="add-btn" aria-label="Add attachment">+</button>
-            <textarea placeholder="Ask AI to code..." rows="1"></textarea>
+            <textarea id="chat-input" placeholder="Ask AI to code..." rows="1" data-i18n-placeholder="placeholder"></textarea>
             <div class="model-selector">GPT-4</div>
           </div>
         </div>
@@ -42,47 +43,47 @@
         <header class="top-bar">
           <div class="top-bar-left">
             <p class="eyebrow">Codex LAN Monitor</p>
-            <p class="hero-copy" id="hero-copy">
+            <p class="hero-copy" id="hero-copy" data-i18n="heroDefault">
               This page follows the current VS Code Codex task running on this machine.
             </p>
           </div>
-          <span class="timestamp" id="updated-at">No updates yet</span>
+          <span class="timestamp" id="updated-at" data-i18n="noUpdates">No updates yet</span>
         </header>
 
-        <section class="banner hidden" id="stale-banner">
+        <section class="banner hidden" id="stale-banner" data-i18n="staleBanner">
           Data may be stale. Waiting for a fresh update from the desktop service.
         </section>
 
         <div class="grid">
           <div class="meta-grid span-2">
             <div class="meta-card">
-              <span class="meta-label">Workspace</span>
-              <span class="meta-value" id="cwd">Waiting for data</span>
+              <span class="meta-label" data-i18n="workspace">Workspace</span>
+              <span class="meta-value" id="cwd" data-i18n="waitingForData">Waiting for data</span>
             </div>
             <div class="meta-card">
-              <span class="meta-label">Mode</span>
+              <span class="meta-label" data-i18n="mode">Mode</span>
               <span class="meta-value" id="collaboration-mode">-</span>
             </div>
           </div>
 
           <section class="card span-2">
             <div class="card-head">
-              <h2>Current Progress</h2>
-              <span class="card-kicker">Live summary</span>
+              <h2 data-i18n="progressTitle">Current Progress</h2>
+              <span class="card-kicker" data-i18n="liveSummary">Live summary</span>
             </div>
-            <p class="lead" id="progress-text">No active Codex task detected.</p>
+            <p class="lead" id="progress-text" data-i18n="noTask">No active Codex task detected.</p>
             <div class="detail-block">
-              <span class="detail-label">Latest prompt</span>
+              <span class="detail-label" data-i18n="latestPrompt">Latest prompt</span>
               <p class="detail-text" id="prompt-text">-</p>
             </div>
           </section>
 
           <section class="card">
             <div class="card-head">
-              <h2>Recent Command</h2>
-              <span class="card-kicker">Shell activity</span>
+              <h2 data-i18n="recentCommand">Recent Command</h2>
+              <span class="card-kicker" data-i18n="shellActivity">Shell activity</span>
             </div>
-            <p class="mono detail-text" id="command-summary">No command seen yet.</p>
+            <p class="mono detail-text" id="command-summary" data-i18n="noCommand">No command seen yet.</p>
             <div class="inline-meta">
               <span id="command-status">-</span>
               <span id="command-duration">-</span>
@@ -91,10 +92,10 @@
 
           <section class="card">
             <div class="card-head">
-              <h2>Recent Tool</h2>
-              <span class="card-kicker">Tooling activity</span>
+              <h2 data-i18n="recentTool">Recent Tool</h2>
+              <span class="card-kicker" data-i18n="toolingActivity">Tooling activity</span>
             </div>
-            <p class="detail-text" id="tool-summary">No tool activity yet.</p>
+            <p class="detail-text" id="tool-summary" data-i18n="noTool">No tool activity yet.</p>
             <div class="inline-meta">
               <span id="tool-name">-</span>
               <span id="tool-status">-</span>
@@ -103,14 +104,14 @@
 
           <section class="card span-2">
             <div class="card-head">
-              <h2>Token Usage</h2>
-              <span class="card-kicker">Latest totals</span>
+              <h2 data-i18n="tokenUsage">Token Usage</h2>
+              <span class="card-kicker" data-i18n="latestTotals">Latest totals</span>
             </div>
             <dl class="stats" id="token-stats">
-              <div><dt>Total</dt><dd>-</dd></div>
-              <div><dt>Input</dt><dd>-</dd></div>
-              <div><dt>Output</dt><dd>-</dd></div>
-              <div><dt>Reasoning</dt><dd>-</dd></div>
+              <div><dt data-i18n="total">Total</dt><dd>-</dd></div>
+              <div><dt data-i18n="input">Input</dt><dd>-</dd></div>
+              <div><dt data-i18n="output">Output</dt><dd>-</dd></div>
+              <div><dt data-i18n="reasoning">Reasoning</dt><dd>-</dd></div>
             </dl>
           </section>
         </div>
