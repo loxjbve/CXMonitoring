@@ -218,13 +218,31 @@ function updateStaticTexts() {
   });
 }
 
+function extractSimpleTitle(rawTitle) {
+  if (!rawTitle) return "";
+  const lines = String(rawTitle).split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return rawTitle;
+  
+  let title = lines[lines.length - 1];
+  title = title.replace(/^#+\s*/, '');
+  title = title.replace(/^\*\*|\*\*$/g, '');
+  title = title.replace(/^["']|["']$/g, '');
+  
+  if (title.length > 60) {
+    title = title.substring(0, 57) + "...";
+  }
+  
+  return title;
+}
+
 function renderSnapshot() {
   const snapshot = state.snapshot || {};
   const hasThread = Boolean(snapshot.thread_id);
   const t = translations[currentLang];
 
+  const rawTitle = snapshot.title || t.untitledTask;
   elements.taskTitle.textContent = hasThread
-    ? snapshot.title || t.untitledTask
+    ? extractSimpleTitle(rawTitle)
     : t.taskTitle;
 
   elements.heroCopy.textContent = hasThread
@@ -239,7 +257,6 @@ function renderSnapshot() {
   elements.collaborationMode.textContent = snapshot.collaboration_mode || "-";
   elements.progressText.textContent =
     snapshot.last_agent_message || t.noTask;
-  elements.promptText.textContent = snapshot.last_user_message || "-";
 
   const command = snapshot.last_command || {};
   elements.commandSummary.textContent = command.summary || t.noCommand;
