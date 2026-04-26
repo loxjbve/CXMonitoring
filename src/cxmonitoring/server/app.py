@@ -5,7 +5,7 @@ import json
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -54,6 +54,23 @@ def create_app(
     @app.get("/api/health")
     async def health() -> dict[str, object]:
         return await monitor.get_health()
+
+    @app.post("/api/messages")
+    async def messages(payload: dict[str, object]) -> dict[str, object]:
+        content = str(payload.get("content") or "").strip()
+        if not content:
+            raise HTTPException(status_code=400, detail="Message content is required.")
+
+        kind = str(payload.get("kind") or "instruction")
+        reply_to = payload.get("reply_to")
+        try:
+            return await monitor.record_message(
+                content,
+                kind=kind,
+                reply_to=None if reply_to is None else str(reply_to),
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     @app.get("/api/stream")
     async def stream(request: Request) -> StreamingResponse:

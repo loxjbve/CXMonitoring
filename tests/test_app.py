@@ -185,6 +185,81 @@ class AppIntegrationTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 await monitor.stop()
 
+    async def test_post_message_persists_and_reloads_with_active_thread(self) -> None:
+        with self.tempdir() as tmpdir:
+            codex_home = Path(tmpdir)
+            rollout_path = codex_home / "rollout.jsonl"
+            rollout_path.write_text(
+                self.event(
+                    "event_msg",
+                    "task_started",
+                    turn_id="turn-1",
+                    started_at=1776179561,
+                    collaboration_mode_kind="plan",
+                )
+                + "\n"
+                + self.event(
+                    "event_msg",
+                    "agent_message",
+                    message="I am ready for a mobile instruction.",
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            state_db_path = codex_home / "state_5.sqlite"
+            logs_db_path = codex_home / "logs_2.sqlite"
+            self.create_thread_db(state_db_path, rollout_path)
+            logs_db_path.touch()
+
+            settings = Settings(
+                codex_home=codex_home,
+                state_db_path=state_db_path,
+                logs_db_path=logs_db_path,
+                host="127.0.0.1",
+                port=3180,
+                thread_poll_interval=0.05,
+                rollout_poll_interval=0.05,
+                timeline_limit=20,
+            )
+
+            app = create_app(settings=settings)
+            monitor = app.state.monitor
+            await monitor.start()
+            try:
+                await asyncio.sleep(0.2)
+
+                post_endpoint = self.route_endpoint(app, "/api/messages")
+                response = await post_endpoint(
+                    {
+                        "content": "Please keep the reply channel open for quick follow-ups.",
+                        "kind": "instruction",
+                    }
+                )
+
+                self.assertEqual(response["entry"]["kind"], "user")
+                self.assertEqual(
+                    response["snapshot"]["timeline"][-1]["details"],
+                    "Please keep the reply channel open for quick follow-ups.",
+                )
+            finally:
+                await monitor.stop()
+
+            reopened_app = create_app(settings=settings)
+            reopened_monitor = reopened_app.state.monitor
+            await reopened_monitor.start()
+            try:
+                await asyncio.sleep(0.2)
+                current_endpoint = self.route_endpoint(reopened_app, "/api/current")
+                snapshot = await current_endpoint()
+                self.assertEqual(snapshot["timeline"][-1]["kind"], "user")
+                self.assertEqual(
+                    snapshot["timeline"][-1]["details"],
+                    "Please keep the reply channel open for quick follow-ups.",
+                )
+            finally:
+                await reopened_monitor.stop()
+
     class FakeRequest:
         def __init__(self) -> None:
             self._disconnected = False

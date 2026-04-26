@@ -64,6 +64,59 @@ class RolloutProjector:
             updated_at=thread.updated_at,
         )
 
+    def _choice_metadata(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        choices = self._normalize_choices(payload.get("choices") or payload.get("options"))
+        if not choices:
+            return None
+
+        metadata: dict[str, Any] = {"choices": choices}
+        prompt = payload.get("message") or payload.get("prompt") or payload.get("question")
+        if prompt:
+            metadata["prompt"] = prompt
+
+        request_id = payload.get("request_id") or payload.get("call_id") or payload.get("id")
+        if request_id is not None:
+            metadata["request_id"] = str(request_id)
+        return metadata
+
+    def _normalize_choices(self, value: Any) -> list[dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+
+        normalized: list[dict[str, Any]] = []
+        for item in value:
+            normalized_item = self._normalize_choice_item(item)
+            if normalized_item is not None:
+                normalized.append(normalized_item)
+        return normalized
+
+    def _normalize_choice_item(self, value: Any) -> dict[str, Any] | None:
+        if isinstance(value, str):
+            text = summarize_text(value, 120)
+            if not text:
+                return None
+            return {"label": text, "value": text}
+
+        if isinstance(value, dict):
+            label = value.get("label") or value.get("text") or value.get("title") or value.get("value")
+            choice_value = value.get("value") or value.get("label") or value.get("text") or value.get("title")
+            if label is None and choice_value is None:
+                return None
+
+            normalized: dict[str, Any] = {
+                "label": str(label or choice_value).strip(),
+                "value": str(choice_value or label).strip(),
+            }
+            for key in ("id", "reply_to", "replyTo", "request_id"):
+                if value.get(key) is not None:
+                    normalized[key] = value.get(key)
+            return normalized
+
+        text = summarize_text(value, 120)
+        if not text:
+            return None
+        return {"label": text, "value": text}
+
     def apply_event(
         self, snapshot: CurrentThreadSnapshot, event: dict[str, Any]
     ) -> list[TimelineEntry]:
@@ -113,17 +166,50 @@ class RolloutProjector:
             )
             return
 
+        if inner_type in {"choice_request", "decision_request"}:
+            message = payload.get("message") or payload.get("prompt") or payload.get("question")
+            metadata = self._choice_metadata(payload)
+            prompt_source = message
+            if prompt_source is None and metadata:
+                prompt_source = metadata.get("prompt")
+            prompt = str(prompt_source or "Choose a reply.")
+            snapshot.last_agent_message = prompt
+            timeline_entries.append(
+                self._timeline(
+                    timestamp,
+                    "choice",
+                    "Decision needed",
+                    summarize_text(prompt),
+                    payload.get("phase"),
+                    details=prompt,
+                    metadata=metadata,
+                )
+            )
+            return
+
         if inner_type == "agent_message":
-            message = payload.get("message")
+            metadata = self._choice_metadata(payload)
+            message = (
+                payload.get("message")
+                or payload.get("prompt")
+                or payload.get("question")
+                or (metadata.get("prompt") if metadata else None)
+                or ("Choose a reply." if metadata else None)
+            )
             if message:
-                snapshot.last_agent_message = message
+                message_text = str(message)
+                snapshot.last_agent_message = message_text
+                kind = "choice" if metadata else "agent"
+                label = "Decision needed" if kind == "choice" else "Codex"
                 timeline_entries.append(
                     self._timeline(
                         timestamp,
-                        "agent",
-                        "Codex",
-                        summarize_text(message),
+                        kind,
+                        label,
+                        summarize_text(message_text),
                         payload.get("phase"),
+                        details=message_text,
+                        metadata=metadata,
                     )
                 )
             return
@@ -131,9 +217,17 @@ class RolloutProjector:
         if inner_type == "user_message":
             message = payload.get("message")
             if message:
-                snapshot.last_user_message = summarize_text(message)
+                message_text = str(message)
+                snapshot.last_user_message = summarize_text(message_text)
                 timeline_entries.append(
-                    self._timeline(timestamp, "user", "Prompt", summarize_text(message), None)
+                    self._timeline(
+                        timestamp,
+                        "user",
+                        "Prompt",
+                        summarize_text(message_text),
+                        None,
+                        details=message_text,
+                    )
                 )
             return
 
@@ -358,6 +452,9 @@ class RolloutProjector:
         label: str,
         summary: str,
         raw_status: str | None,
+        *,
+        details: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> TimelineEntry:
         return TimelineEntry(
             ts=timestamp or "",
@@ -365,6 +462,8 @@ class RolloutProjector:
             label=label,
             summary=summary,
             raw_status=raw_status,
+            details=details,
+            metadata=metadata,
         )
 
     def _mark_unknown(self, outer_type: str | None, inner_type: str | None) -> None:

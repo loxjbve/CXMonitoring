@@ -41,7 +41,11 @@ const translations = {
     langToggle: "🇺🇸 EN",
     staleBanner: "Data may be stale. Waiting for a fresh update from the desktop service.",
     untitledTask: "Untitled Codex task",
-    event: "Event"
+    event: "Event",
+    composePlaceholder: "Tell AI what to do next...",
+    relayMode: "Mobile relay",
+    send: "Send",
+    langToggleLabel: "中文"
   },
   zh: {
     taskTitle: "正在寻找活跃的 Codex 任务",
@@ -85,7 +89,11 @@ const translations = {
     langToggle: "🇨🇳 中文",
     staleBanner: "数据可能已过期。正在等待桌面服务的新更新。",
     untitledTask: "未命名 Codex 任务",
-    event: "事件"
+    event: "事件",
+    composePlaceholder: "告诉 AI 下一步要做什么…",
+    relayMode: "移动中继",
+    send: "发送",
+    langToggleLabel: "EN"
   }
 };
 
@@ -95,6 +103,7 @@ const state = {
   snapshot: null,
   eventSource: null,
   lastHeartbeatAt: 0,
+  isSending: false,
 };
 
 const elements = {
@@ -118,11 +127,14 @@ const elements = {
   emptyState: document.getElementById("empty-state"),
   staleBanner: document.getElementById("stale-banner"),
   langToggleBtn: document.getElementById("lang-toggle-btn"),
+  chatInput: document.getElementById("chat-input"),
+  sendBtn: document.getElementById("send-btn"),
 };
 
 async function bootstrap() {
   initDrawer();
   initI18n();
+  initComposer();
 
   try {
     const response = await fetch("/api/current", { cache: "no-store" });
@@ -180,6 +192,7 @@ function connectStream() {
 
 function updateSnapshot(snapshot) {
   state.snapshot = snapshot;
+  state.lastHeartbeatAt = Date.now();
   renderSnapshot();
 }
 
@@ -200,7 +213,7 @@ function initI18n() {
 function updateStaticTexts() {
   const t = translations[currentLang];
   if (elements.langToggleBtn) {
-    elements.langToggleBtn.textContent = currentLang === "zh" ? "🇺🇸 EN" : "🇨🇳 中文";
+    elements.langToggleBtn.textContent = t.langToggleLabel || (currentLang === "zh" ? "EN" : "中文");
   }
 
   document.querySelectorAll("[data-i18n]").forEach((el) => {
@@ -281,6 +294,7 @@ function renderSnapshot() {
   renderTokenStats(snapshot.token_usage || null);
   renderTimeline();
   elements.emptyState.classList.toggle("hidden", hasThread);
+  syncComposerState();
 }
 
 function renderTokenStats(tokenUsage) {
@@ -305,71 +319,376 @@ function renderTimeline() {
   const snapshot = state.snapshot || {};
   const timeline = Array.isArray(snapshot.timeline) ? snapshot.timeline : [];
   const t = translations[currentLang];
-  
-  elements.timelineList.innerHTML = timeline
-    .map((entry) => {
-      const kindStr = (entry.kind || entry.label || "").toLowerCase();
-      const isUser = kindStr.includes("user") || kindStr === "prompt";
-      const isTool = kindStr.includes("tool") || kindStr.includes("action") || kindStr.includes("command") || kindStr.includes("step");
-      const isDiff = kindStr.includes("diff") || kindStr.includes("edit") || kindStr.includes("code");
-      
-      if (isUser) {
-        return "";
-      }
-      
-      const label = escapeHtml(entry.label || entry.kind || t.event);
-      const time = escapeHtml(formatTime(entry.ts));
-      const summary = escapeHtml(entry.summary || "");
 
-      if (isTool) {
-        return `
-          <div class="message ai">
-            <div class="step-indicator">
-              <div class="step-spinner"></div>
-              <span>${label}: ${summary}</span>
-              <span class="timestamp" style="margin-left: auto;">${time}</span>
-            </div>
-          </div>
-        `;
-      } else if (isDiff) {
-        return `
-          <div class="message ai">
-            <div class="message-header">
-              <span class="message-sender">${t.codex}</span>
-              <span class="timestamp">${time}</span>
-            </div>
-            <div class="diff-block">
-              <div class="diff-header">
-                <span>${label}</span>
-                <div class="diff-actions">
-                  <button class="diff-btn">${t.reject}</button>
-                  <button class="diff-btn apply">${t.apply}</button>
-                </div>
-              </div>
-              <div class="diff-content">
-                <div class="diff-line remove">- // Old implementation</div>
-                <div class="diff-line add">+ ${summary}</div>
-              </div>
-            </div>
-          </div>
-        `;
-      } else {
-        return `
-          <div class="message ai">
-            <div class="message-header">
-              <span class="message-sender">${t.codex}</span>
-              <span class="timestamp">${time}</span>
-            </div>
-            <div class="message-content">${summary}</div>
-          </div>
-        `;
-      }
-    })
+  elements.timelineList.innerHTML = timeline
+    .map((entry) => renderTimelineEntry(entry, t))
+    .filter(Boolean)
     .join("");
+
+  bindChoiceButtons();
 
   const container = document.getElementById("timeline-container");
   if (container) {
     container.scrollTop = container.scrollHeight;
+  }
+  syncComposerState();
+}
+
+function renderTimelineEntry(entry, t) {
+  const kindStr = String(entry.kind || entry.label || "").toLowerCase();
+  const isUser = kindStr.includes("user") || kindStr === "prompt";
+  const choiceRequest = !isUser ? extractChoiceRequest(entry) : null;
+  const time = escapeHtml(formatTime(entry.ts));
+
+  if (choiceRequest) {
+    return renderChoiceTimelineEntry(entry, choiceRequest, time, t);
+  }
+
+  if (isUser) {
+    return renderUserTimelineEntry(entry, time, t);
+  }
+
+  const isTool =
+    kindStr.includes("tool") ||
+    kindStr.includes("action") ||
+    kindStr.includes("command") ||
+    kindStr.includes("step");
+  const isDiff = kindStr.includes("diff") || kindStr.includes("edit") || kindStr.includes("code");
+  const label = escapeHtml(entry.label || entry.kind || t.event);
+  const summary = escapeHtml(entry.summary || "");
+
+  if (isTool) {
+    return `
+      <div class="message ai">
+        <div class="step-indicator">
+          <div class="step-spinner"></div>
+          <span>${label}: ${summary}</span>
+          <span class="timestamp" style="margin-left: auto;">${time}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (isDiff) {
+    return `
+      <div class="message ai">
+        <div class="message-header">
+          <span class="message-sender">${t.codex}</span>
+          <span class="timestamp">${time}</span>
+        </div>
+        <div class="diff-block">
+          <div class="diff-header">
+            <span>${label}</span>
+            <div class="diff-actions">
+              <button class="diff-btn" type="button">${t.reject}</button>
+              <button class="diff-btn apply" type="button">${t.apply}</button>
+            </div>
+          </div>
+          <div class="diff-content">
+            <div class="diff-line remove">- // Old implementation</div>
+            <div class="diff-line add">+ ${summary}</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="message ai">
+      <div class="message-header">
+        <span class="message-sender">${t.codex}</span>
+        <span class="timestamp">${time}</span>
+      </div>
+      <div class="message-content">${summary}</div>
+    </div>
+  `;
+}
+
+function renderUserTimelineEntry(entry, time, t) {
+  const sender = escapeHtml(t.user);
+  const content = escapeHtml(entry.details || entry.summary || "");
+
+  return `
+    <div class="message user">
+      <div class="message-header">
+        <span class="message-sender">${sender}</span>
+        <span class="timestamp">${time}</span>
+      </div>
+      <div class="message-content">${content}</div>
+    </div>
+  `;
+}
+
+function renderChoiceTimelineEntry(entry, choiceRequest, time, t) {
+  const prompt = escapeHtml(choiceRequest.prompt || entry.details || entry.summary || "");
+  const options = choiceRequest.choices
+    .map((choice) => {
+      const label = escapeHtml(choice.label || choice.value || "");
+      const value = escapeHtml(choice.value || choice.label || "");
+      const replyTo = escapeHtml(choice.replyTo || choice.reply_to || choiceRequest.replyTo || deriveReplyKey(entry));
+      return `
+        <button
+          class="choice-btn"
+          type="button"
+          data-choice-value="${value}"
+          data-choice-reply-to="${replyTo}"
+        >${label}</button>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="message ai choice-request">
+      <div class="message-header">
+        <span class="message-sender">${t.codex}</span>
+        <span class="timestamp">${time}</span>
+      </div>
+      <div class="message-content choice-card">
+        <div class="choice-prompt">${prompt}</div>
+        <div class="choice-options">${options}</div>
+      </div>
+    </div>
+  `;
+}
+
+function extractChoiceRequest(entry) {
+  const metadata = entry.metadata || {};
+  const structuredChoices = normalizeChoiceList(metadata.choices || metadata.options);
+  if (structuredChoices.length >= 2) {
+    return {
+      prompt: metadata.prompt || entry.details || entry.summary || "",
+      choices: structuredChoices,
+      replyTo: metadata.request_id || metadata.requestId || metadata.reply_to || metadata.replyTo || deriveReplyKey(entry),
+    };
+  }
+
+  const parsed = parseChoiceText(entry.details || entry.summary || "");
+  if (parsed) {
+    return {
+      prompt: parsed.prompt || entry.details || entry.summary || "",
+      choices: parsed.choices,
+      replyTo: parsed.replyTo || deriveReplyKey(entry),
+    };
+  }
+
+  return null;
+}
+
+function normalizeChoiceList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map(normalizeChoiceOption).filter(Boolean);
+}
+
+function normalizeChoiceOption(choice) {
+  if (typeof choice === "string") {
+    const text = choice.trim();
+    if (!text) {
+      return null;
+    }
+    return { label: text, value: text };
+  }
+
+  if (choice && typeof choice === "object") {
+    const label = choice.label || choice.text || choice.title || choice.value;
+    const value = choice.value || label;
+    if (!label && !value) {
+      return null;
+    }
+    return {
+      label: String(label || value),
+      value: String(value || label),
+      replyTo: choice.reply_to || choice.replyTo || choice.request_id || choice.requestId || null,
+    };
+  }
+
+  const text = String(choice ?? "").trim();
+  if (!text) {
+    return null;
+  }
+  return { label: text, value: text };
+}
+
+function parseChoiceText(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  if (raw.startsWith("{") || raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      const structuredChoices = normalizeChoiceList(parsed.choices || parsed.options);
+      if (structuredChoices.length >= 2) {
+        return {
+          prompt: parsed.prompt || parsed.message || parsed.question || "",
+          choices: structuredChoices,
+          replyTo: parsed.request_id || parsed.requestId || parsed.call_id || parsed.callId || null,
+        };
+      }
+    } catch (error) {
+      // Fall through to line-based parsing.
+    }
+  }
+
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const choices = [];
+  const promptLines = [];
+  let seenChoice = false;
+
+  for (const line of lines) {
+    const match = line.match(/^(?:[-*•]|\d+[.)]|[A-Za-z][.)])\s+(.+)$/);
+    if (match) {
+      seenChoice = true;
+      choices.push({ label: match[1].trim(), value: match[1].trim() });
+      continue;
+    }
+
+    if (!seenChoice) {
+      promptLines.push(line);
+    }
+  }
+
+  const prompt = promptLines.join(" ").trim();
+  const looksLikeChoice =
+    choices.length >= 2 &&
+    (/choose|select|pick|reply|option|which|decision/i.test(prompt || raw) || /:\s*$/.test(promptLines[promptLines.length - 1] || ""));
+
+  if (!looksLikeChoice) {
+    return null;
+  }
+
+  return {
+    prompt: prompt || "Choose a reply.",
+    choices,
+    replyTo: null,
+  };
+}
+
+function deriveReplyKey(entry) {
+  const metadata = entry.metadata || {};
+  return (
+    metadata.request_id ||
+    metadata.requestId ||
+    [entry.ts || "", entry.kind || "", entry.label || "", entry.summary || ""].join("::")
+  );
+}
+
+function bindChoiceButtons() {
+  if (!elements.timelineList) {
+    return;
+  }
+
+  elements.timelineList.querySelectorAll("[data-choice-value]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const value = button.getAttribute("data-choice-value") || button.textContent || "";
+      const replyTo = button.getAttribute("data-choice-reply-to") || null;
+      sendMessage(value, { kind: "choice_reply", replyTo });
+    });
+  });
+}
+
+function initComposer() {
+  if (elements.chatInput) {
+    elements.chatInput.addEventListener("input", resizeComposer);
+    elements.chatInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage(elements.chatInput.value);
+      }
+    });
+    resizeComposer();
+  }
+
+  if (elements.sendBtn) {
+    elements.sendBtn.addEventListener("click", () => {
+      sendMessage(elements.chatInput ? elements.chatInput.value : "");
+    });
+  }
+
+  syncComposerState();
+}
+
+function resizeComposer() {
+  if (!elements.chatInput) {
+    return;
+  }
+
+  elements.chatInput.style.height = "auto";
+  const nextHeight = Math.min(elements.chatInput.scrollHeight, 120);
+  elements.chatInput.style.height = `${nextHeight}px`;
+}
+
+function syncComposerState() {
+  const hasThread = Boolean(state.snapshot && state.snapshot.thread_id);
+  const disabled = !hasThread || state.isSending;
+
+  if (elements.chatInput) {
+    elements.chatInput.disabled = disabled;
+  }
+  if (elements.sendBtn) {
+    elements.sendBtn.disabled = disabled;
+  }
+  if (elements.timelineList) {
+    elements.timelineList.querySelectorAll("[data-choice-value]").forEach((button) => {
+      button.disabled = disabled;
+    });
+  }
+}
+
+async function sendMessage(content, options = {}) {
+  const text = String(content || "").trim();
+  if (!text || state.isSending) {
+    return false;
+  }
+
+  const hasThread = Boolean(state.snapshot && state.snapshot.thread_id);
+  if (!hasThread) {
+    return false;
+  }
+
+  state.isSending = true;
+  syncComposerState();
+
+  try {
+    const payload = {
+      content: text,
+      kind: options.kind || "instruction",
+    };
+    if (options.replyTo) {
+      payload.reply_to = options.replyTo;
+    }
+
+    const response = await fetch("/api/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    const data = await response.json();
+    if (data.snapshot) {
+      updateSnapshot(data.snapshot);
+    }
+
+    if (elements.chatInput) {
+      elements.chatInput.value = "";
+      resizeComposer();
+    }
+    return true;
+  } catch (error) {
+    console.error("Failed to send message", error);
+    return false;
+  } finally {
+    state.isSending = false;
+    syncComposerState();
   }
 }
 

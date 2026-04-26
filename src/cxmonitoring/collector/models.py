@@ -99,6 +99,8 @@ class TimelineEntry:
     label: str
     summary: str
     raw_status: str | None = None
+    details: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

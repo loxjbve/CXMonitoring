@@ -20,6 +20,10 @@ class Settings:
     def static_dir(self) -> Path:
         return Path(__file__).resolve().parent / "static"
 
+    @property
+    def bridge_db_path(self) -> Path:
+        return self.codex_home / "cxmonitoring_bridge.sqlite"
+
     @classmethod
     def from_env(cls) -> "Settings":
         codex_home = Path(

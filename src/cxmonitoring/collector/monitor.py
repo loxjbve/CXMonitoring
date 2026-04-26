@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings
+from .interaction_store import InteractionStore
 from .models import CurrentThreadSnapshot, MonitorHealth, StreamEvent, ThreadRecord, utc_now_iso
 from .projector import RolloutProjector
 from .repository import ThreadRepository
@@ -17,6 +18,8 @@ class RolloutMonitor:
         self._settings = settings
         self._repository = ThreadRepository(settings.state_db_path)
         self._projector = RolloutProjector(settings.timeline_limit)
+        self._interaction_store = InteractionStore(settings.bridge_db_path)
+        self._timeline_limit = settings.timeline_limit
         self._snapshot = CurrentThreadSnapshot()
         self._health = MonitorHealth(
             state_db_path=str(settings.state_db_path),
@@ -32,6 +35,7 @@ class RolloutMonitor:
 
     async def start(self) -> None:
         if self._runner is None or self._runner.done():
+            await asyncio.to_thread(self._interaction_store.initialize)
             await self._refresh_active_thread()
             await self._read_rollout_updates()
             self._runner = asyncio.create_task(self._run(), name="cxmonitoring-rollout-monitor")
@@ -68,6 +72,51 @@ class RolloutMonitor:
             self._health.unknown_event_count = self._projector.unknown_event_count
             self._health.status = self._derive_health_status()
             return self._health.to_dict()
+
+    async def record_message(
+        self,
+        content: str,
+        *,
+        kind: str = "instruction",
+        reply_to: str | None = None,
+    ) -> dict[str, Any]:
+        text = content.strip()
+        if not text:
+            raise ValueError("Message content cannot be empty.")
+
+        async with self._state_lock:
+            thread = self._current_thread
+            thread_id = thread.id if thread is not None else None
+
+        if thread is None or not thread_id:
+            raise RuntimeError("No active thread is available.")
+
+        record = await asyncio.to_thread(
+            self._interaction_store.append_message,
+            thread_id=thread_id,
+            content=text,
+            kind=kind,
+            reply_to=reply_to,
+        )
+        entry = record.to_timeline_entry()
+
+        async with self._state_lock:
+            if self._snapshot.thread_id != thread_id:
+                return {"entry": entry.to_dict(), "snapshot": self._snapshot.to_dict()}
+
+            timeline = list(self._snapshot.timeline)
+            timeline.append(entry)
+            timeline.sort(key=lambda item: item.ts or "")
+            self._snapshot.timeline = timeline[-self._timeline_limit :]
+            self._snapshot.updated_at = entry.ts
+            self._snapshot.last_event_at = entry.ts
+            self._snapshot.last_user_message = entry.details or entry.summary
+            self._health.last_successful_event_at = entry.ts
+            self._health.last_error = None
+            snapshot = self._snapshot.to_dict()
+
+        await self._broadcast("snapshot", snapshot)
+        return {"entry": entry.to_dict(), "snapshot": snapshot}
 
     async def _run(self) -> None:
         next_thread_refresh = 0.0
@@ -119,6 +168,10 @@ class RolloutMonitor:
             return
 
         snapshot = await asyncio.to_thread(self._replay_thread, thread)
+        interaction_entries = await asyncio.to_thread(
+            self._interaction_store.list_timeline_entries, thread.id
+        )
+        snapshot = self._merge_interaction_entries(snapshot, interaction_entries)
         rollout_path = Path(thread.rollout_path)
         async with self._state_lock:
             self._current_thread = thread
@@ -134,6 +187,30 @@ class RolloutMonitor:
             {"thread_id": thread.id, "title": thread.title, "rollout_path": thread.rollout_path},
         )
         await self._broadcast("snapshot", snapshot.to_dict())
+
+    def _merge_interaction_entries(
+        self,
+        snapshot: CurrentThreadSnapshot,
+        interaction_entries: list[Any],
+    ) -> CurrentThreadSnapshot:
+        if not interaction_entries:
+            return snapshot
+
+        merged = list(snapshot.timeline)
+        merged.extend(interaction_entries)
+        merged.sort(key=lambda entry: entry.ts or "")
+        snapshot.timeline = merged[-self._timeline_limit :]
+
+        latest_entry = snapshot.timeline[-1] if snapshot.timeline else None
+        if latest_entry and latest_entry.ts:
+            snapshot.updated_at = latest_entry.ts
+            snapshot.last_event_at = latest_entry.ts
+
+        for entry in reversed(snapshot.timeline):
+            if str(entry.kind).startswith("user") or entry.kind == "prompt":
+                snapshot.last_user_message = entry.details or entry.summary
+                break
+        return snapshot
 
     def _replay_thread(self, thread: ThreadRecord) -> CurrentThreadSnapshot:
         snapshot = self._projector.create_snapshot(thread)

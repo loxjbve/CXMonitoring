@@ -58,6 +58,25 @@ class RolloutProjectorTests(unittest.TestCase):
         self.assertEqual(self.snapshot.last_agent_message, "Scanning the repo structure now.")
         self.assertEqual(self.snapshot.timeline[-1].kind, "agent")
 
+    def test_agent_message_with_choices_creates_choice_metadata(self) -> None:
+        self.projector.apply_event(
+            self.snapshot,
+            self.event(
+                "event_msg",
+                "agent_message",
+                message="Which direction should we take next?",
+                choices=["Refactor the drawer", "Keep the current layout"],
+                request_id="choice-1",
+            ),
+        )
+
+        entry = self.snapshot.timeline[-1]
+        self.assertEqual(entry.kind, "choice")
+        self.assertEqual(entry.details, "Which direction should we take next?")
+        self.assertIsNotNone(entry.metadata)
+        self.assertEqual(entry.metadata["request_id"], "choice-1")
+        self.assertEqual(entry.metadata["choices"][0]["value"], "Refactor the drawer")
+
     def test_function_call_updates_active_tool(self) -> None:
         self.projector.apply_event(
             self.snapshot,
@@ -127,4 +146,3 @@ class RolloutProjectorTests(unittest.TestCase):
     def test_unknown_event_is_ignored_without_crash(self) -> None:
         self.projector.apply_event(self.snapshot, self.event("event_msg", "unknown_thing"))
         self.assertEqual(self.projector.unknown_event_count, 1)
-
